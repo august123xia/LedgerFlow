@@ -296,5 +296,113 @@ def get_invoices_by_customer(customer_name):
     return jsonify(result)
 
 
+
+from openai import APIError
+from payment_analysis import analyze_payment
+
+
+@app.route("/payments/analyze", methods=["POST"])
+def analyze_payment_discrepancy():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "A valid JSON object is required"}), 400
+
+    try:
+        result = analyze_payment(
+            invoice_amount=data.get("invoice_amount"),
+            received_amount=data.get("received_amount"),
+            customer_claim=data.get("customer_claim"),
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except APIError:
+        return jsonify({
+            "error": "Payment analysis provider request failed"
+        }), 502
+    except RuntimeError:
+        return jsonify({
+            "error": "Payment analysis is unavailable; check server configuration or retry"
+        }), 503
+
+    return jsonify(result), 200
+
+
+
+from datetime import date
+import json
+from python.aging_report import build_aging_reports
+
+
+@app.route("/reports/aging", methods=["GET"])
+def get_aging_report():
+    report_date = request.args.get("report_date", "")
+    try:
+        parsed_date = date.fromisoformat(report_date)
+        if parsed_date.isoformat() != report_date:
+            raise ValueError
+    except ValueError:
+        return jsonify({
+            "error": "report_date is required in YYYY-MM-DD format"
+        }), 400
+
+    reports = build_aging_reports(report_date)
+    unpaid = reports["unpaid_aging_report"]
+    overdue = reports["overdue_report"]
+    summary = reports["overdue_summary_by_bucket"]
+
+    return jsonify({
+        "report_date": report_date,
+        "data_source": "data/invoices.csv",
+        "unpaid_invoice_count": len(unpaid),
+        "overdue_invoice_count": len(overdue),
+        "total_unpaid": float(unpaid["amount"].sum()),
+        "total_overdue": float(overdue["amount"].sum()),
+        "overdue_summary_by_bucket": json.loads(
+            summary.to_json(orient="records")
+        ),
+    }), 200
+
+
+
+from python.overdue_customer_priority import build_customer_priority_summary
+
+
+@app.route("/reports/customer-priority", methods=["GET"])
+def get_customer_priority_report():
+    report_date = request.args.get("report_date", "")
+    try:
+        parsed_date = date.fromisoformat(report_date)
+        if parsed_date.isoformat() != report_date:
+            raise ValueError
+    except ValueError:
+        return jsonify({
+            "error": "report_date is required in YYYY-MM-DD format"
+        }), 400
+
+    reports = build_aging_reports(report_date)
+    summary = build_customer_priority_summary(reports["overdue_report"])
+
+    return jsonify({
+        "report_date": report_date,
+        "data_source": "data/invoices.csv",
+        "customer_count": len(summary),
+        "customers": json.loads(summary.to_json(orient="records")),
+    }), 200
+
+
+
+from python.soa_generator import build_soa
+
+
+@app.route("/reports/soa", methods=["GET"])
+def get_soa_report():
+    result = build_soa()
+    return jsonify({
+        "data_source": "data/soa_*.csv",
+        "scope": "single_customer_demo",
+        **result,
+    }), 200
+
+
 if __name__ == "__main__":
     app.run(debug=True)
