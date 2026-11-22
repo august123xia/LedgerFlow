@@ -296,5 +296,36 @@ def get_invoices_by_customer(customer_name):
     return jsonify(result)
 
 
+
+from openai import APIError
+from payment_analysis import analyze_payment
+
+
+@app.route("/payments/analyze", methods=["POST"])
+def analyze_payment_discrepancy():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "A valid JSON object is required"}), 400
+
+    try:
+        result = analyze_payment(
+            invoice_amount=data.get("invoice_amount"),
+            received_amount=data.get("received_amount"),
+            customer_claim=data.get("customer_claim"),
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except APIError:
+        return jsonify({
+            "error": "Payment analysis provider request failed"
+        }), 502
+    except RuntimeError:
+        return jsonify({
+            "error": "Payment analysis is unavailable; check server configuration or retry"
+        }), 503
+
+    return jsonify(result), 200
+
+
 if __name__ == "__main__":
     app.run(debug=True)
