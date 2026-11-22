@@ -390,5 +390,19 @@ def get_customer_priority_report():
     }), 200
 
 
+
+from python.soa_generator import build_soa
+
+
+@app.route("/reports/soa", methods=["GET"])
+def get_soa_report():
+    result = build_soa()
+    return jsonify({
+        "data_source": "data/soa_*.csv",
+        "scope": "single_customer_demo",
+        **result,
+    }), 200
+
+
 if __name__ == "__main__":
     app.run(debug=True)

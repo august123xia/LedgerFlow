@@ -1,0 +1,3 @@
+invoice_no,due_date,amount,reason
+INV003,2026-08-10,900,Pending operational review
+INV005,2026-08-20,600,Awaiting customer confirmation
