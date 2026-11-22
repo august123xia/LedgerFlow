@@ -327,5 +327,41 @@ def analyze_payment_discrepancy():
     return jsonify(result), 200
 
 
+
+from datetime import date
+import json
+from python.aging_report import build_aging_reports
+
+
+@app.route("/reports/aging", methods=["GET"])
+def get_aging_report():
+    report_date = request.args.get("report_date", "")
+    try:
+        parsed_date = date.fromisoformat(report_date)
+        if parsed_date.isoformat() != report_date:
+            raise ValueError
+    except ValueError:
+        return jsonify({
+            "error": "report_date is required in YYYY-MM-DD format"
+        }), 400
+
+    reports = build_aging_reports(report_date)
+    unpaid = reports["unpaid_aging_report"]
+    overdue = reports["overdue_report"]
+    summary = reports["overdue_summary_by_bucket"]
+
+    return jsonify({
+        "report_date": report_date,
+        "data_source": "data/invoices.csv",
+        "unpaid_invoice_count": len(unpaid),
+        "overdue_invoice_count": len(overdue),
+        "total_unpaid": float(unpaid["amount"].sum()),
+        "total_overdue": float(overdue["amount"].sum()),
+        "overdue_summary_by_bucket": json.loads(
+            summary.to_json(orient="records")
+        ),
+    }), 200
+
+
 if __name__ == "__main__":
     app.run(debug=True)
