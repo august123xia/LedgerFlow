@@ -363,5 +363,32 @@ def get_aging_report():
     }), 200
 
 
+
+from python.overdue_customer_priority import build_customer_priority_summary
+
+
+@app.route("/reports/customer-priority", methods=["GET"])
+def get_customer_priority_report():
+    report_date = request.args.get("report_date", "")
+    try:
+        parsed_date = date.fromisoformat(report_date)
+        if parsed_date.isoformat() != report_date:
+            raise ValueError
+    except ValueError:
+        return jsonify({
+            "error": "report_date is required in YYYY-MM-DD format"
+        }), 400
+
+    reports = build_aging_reports(report_date)
+    summary = build_customer_priority_summary(reports["overdue_report"])
+
+    return jsonify({
+        "report_date": report_date,
+        "data_source": "data/invoices.csv",
+        "customer_count": len(summary),
+        "customers": json.loads(summary.to_json(orient="records")),
+    }), 200
+
+
 if __name__ == "__main__":
     app.run(debug=True)
